@@ -21,6 +21,15 @@ async fn main() {
     let api_thread = api_server::spawn_api_server(database)
         .expect("Failed to spawn API server thread");
 
+    match MdnsAdvertiser::start(&MdnsAdvertiser::new("Tempmon Server")) {
+        Ok(_mdns_handle) => {
+            log::info!("MDNS advertiser running in the background.");
+        }
+        Err(e) => {
+            log::error!("Failed to start mDNS advertiser: {:?}", e);
+        }
+    }
+    
     log::info!("API server started.");
 
     match api_thread.join() {
@@ -29,18 +38,5 @@ async fn main() {
         Err(_) => eprintln!("API server thread panicked"),
     }
 
-    match MdnsAdvertiser::start(&MdnsAdvertiser::new("Tempmon Server")) {
-        Ok(handle) => {
-            if let Err(e) = handle.join() {
-                log::warn!("mDNS advertiser thread panicked, but ignoring: {:?}", e);
-            } else {
-                log::info!("mDNS advertiser thread exited gracefully.");
-            }
-        }
-        Err(e) => {
-            log::warn!("Failed to start mDNS advertiser, but continuing: {:?}", e);
-        }
-    }
 
-    log::info!("MDNS advertiser started (or bypassed).");
 }
