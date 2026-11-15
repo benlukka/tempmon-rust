@@ -1,7 +1,7 @@
+use mdns_sd::{ServiceDaemon, ServiceInfo};
 use std::error::Error;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
-use mdns_sd::{ServiceDaemon, ServiceInfo};
 
 pub struct MdnsAdvertiser {
     name: String,
@@ -20,7 +20,7 @@ impl MdnsAdvertiser {
         let service_type = "_http._tcp.local.";
         let instance_name = self.name.clone();
         let host_name = "tempmon.local.";
-        let port = 3000;
+        let port = 9247;
 
         let properties = [("version", "2.0.0")];
 
@@ -32,7 +32,7 @@ impl MdnsAdvertiser {
             port,
             &properties[..],
         )?
-            .enable_addr_auto();
+        .enable_addr_auto();
 
         mdns.register(service_info)?;
 

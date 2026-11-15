@@ -1,6 +1,7 @@
 mod api_server;
 pub mod db;
 pub mod mdns_advertiser;
+pub mod ota_service;
 pub mod schema;
 
 use crate::db::DatabaseHandler;
@@ -18,8 +19,8 @@ async fn main() {
     log::info!("Database handler loaded.");
     let database = Arc::new(Mutex::new(database));
 
-    let api_thread = api_server::spawn_api_server(database)
-        .expect("Failed to spawn API server thread");
+    let api_thread =
+        api_server::spawn_api_server(database).expect("Failed to spawn API server thread");
 
     match MdnsAdvertiser::start(&MdnsAdvertiser::new("Tempmon Server")) {
         Ok(_mdns_handle) => {
@@ -29,7 +30,7 @@ async fn main() {
             log::error!("Failed to start mDNS advertiser: {:?}", e);
         }
     }
-    
+
     log::info!("API server started.");
 
     match api_thread.join() {
@@ -37,6 +38,4 @@ async fn main() {
         Ok(Err(e)) => eprintln!("API server stopped with error: {e}"),
         Err(_) => eprintln!("API server thread panicked"),
     }
-
-
 }

@@ -1,15 +1,15 @@
-use std::str::FromStr;
-use chrono::Local;
 use crate::schema::*;
+use chrono::Local;
 use diesel::connection::DatabaseVersion;
 use diesel::prelude::*;
 use diesel_derive_enum::DbEnum;
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
-use poem_openapi::{Enum, Object};
-use std::sync::{Arc, Mutex};
 use poem::Error;
 use poem::error::InternalServerError;
 use poem::http::StatusCode;
+use poem_openapi::{Enum, Object};
+use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 
 #[derive(DbEnum, Debug, Clone, PartialEq, Enum)]
 #[db_enum(
@@ -92,12 +92,17 @@ pub struct Database {
     connection: PgConnection,
 }
 impl Database {
-
     fn run_migrations(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         log::info!("Starting database migrations");
         self.connection.run_pending_migrations(MIGRATIONS)?;
         let diesel_migration = self.connection.applied_migrations();
-        log::info!("Total database migrations: {}. Last Migration: {:?}", diesel_migration.iter().count(), diesel_migration?.first().expect("Database migrations not found"));
+        log::info!(
+            "Total database migrations: {}. Last Migration: {:?}",
+            diesel_migration.iter().count(),
+            diesel_migration?
+                .first()
+                .expect("Database migrations not found")
+        );
         Ok(())
     }
 
@@ -120,7 +125,11 @@ impl Database {
             .load(&mut self.connection)
     }
 
-    pub fn retrieve_measurements_between(&mut self, star_date: chrono::DateTime<Local>, end_date: chrono::DateTime<Local>) -> QueryResult<Vec<Measurement>> {
+    pub fn retrieve_measurements_between(
+        &mut self,
+        star_date: chrono::DateTime<Local>,
+        end_date: chrono::DateTime<Local>,
+    ) -> QueryResult<Vec<Measurement>> {
         measurements::table
             .filter(measurements::recorded_at.ge(star_date))
             .filter(measurements::recorded_at.le(end_date))
@@ -136,19 +145,32 @@ impl Database {
         device_capabilities: Vec<MeasurementType>,
         measurements_data: &[(String, MeasurementType, serde_json::Value)],
     ) -> Result<(), diesel::result::Error> {
-        log::info!("received {} measurements for device: {}", measurements_data.len(), device_hostname);
-        log::info!("Device version: {}, capabilities: {:?}", device_version, device_capabilities);
+        log::info!(
+            "received {} measurements for device: {}",
+            measurements_data.len(),
+            device_hostname
+        );
+        log::info!(
+            "Device version: {}, capabilities: {:?}",
+            device_version,
+            device_capabilities
+        );
 
         if measurements_data.is_empty() {
             log::warn!("Empty measurement list handed to save");
             return Ok(());
         }
 
-        let new_devices: Vec<NewDevice> = measurements_data
+        let distinct_devices: std::collections::BTreeSet<&str> = measurements_data
             .iter()
-            .map(|(d, _, _)| NewDevice {
-                unique_identifier: d.as_str(),
-                name: d.as_str(),
+            .map(|(d, _, _)| d.as_str())
+            .collect();
+
+        let new_devices: Vec<NewDevice> = distinct_devices
+            .into_iter()
+            .map(|d| NewDevice {
+                unique_identifier: d,
+                name: d,
                 version: Some(device_version.as_str()),
             })
             .collect();
@@ -180,10 +202,7 @@ impl Database {
     }
 }
 
-pub async fn run_db<F, T, E>(
-    db: &Arc<Mutex<Database>>,
-    f: F,
-) -> poem::Result<T>
+pub async fn run_db<F, T, E>(db: &Arc<Mutex<Database>>, f: F) -> poem::Result<T>
 where
     F: FnOnce(&mut Database) -> Result<T, E> + Send + 'static,
     T: Send + 'static,
@@ -199,14 +218,15 @@ where
 
         f(&mut guard).map_err(|e| e.to_string())
     })
-        .await;
+    .await;
 
     //Handle the Tokio JoinError (if the thread panicked)
     let db_result = join_result.map_err(InternalServerError)?;
 
     //
     let data = db_result.map_err(|e| {
-        Error::from_string(e, StatusCode::INTERNAL_SERVER_ERROR)
+        log::error!("{:}", e);
+        dbg!(Error::from_string(e, StatusCode::INTERNAL_SERVER_ERROR))
     })?;
     Ok(data)
 }
