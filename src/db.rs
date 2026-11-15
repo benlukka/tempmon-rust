@@ -145,12 +145,12 @@ impl Database {
         device_capabilities: Vec<MeasurementType>,
         measurements_data: &[(String, MeasurementType, serde_json::Value)],
     ) -> Result<(), diesel::result::Error> {
-        log::info!(
+        log::debug!(
             "received {} measurements for device: {}",
             measurements_data.len(),
             device_hostname
         );
-        log::info!(
+        log::debug!(
             "Device version: {}, capabilities: {:?}",
             device_version,
             device_capabilities
@@ -196,7 +196,7 @@ impl Database {
                 .values(&new_measurements)
                 .execute(conn)?;
 
-            log::info!("Successfully saved measurements and device records.");
+            log::debug!("Successfully saved measurements and device records.");
             Ok(())
         })
     }
